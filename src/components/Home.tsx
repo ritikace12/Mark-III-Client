@@ -1,0 +1,168 @@
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import SpeechToText from './SpeechToText';
+
+const Home = () => {
+    const [message, setMessage] = useState('');
+    const [chatHistory, setChatHistory] = useState([
+        { role: 'assistant', content: 'Hello! I\'m Jarvis, your AI assistant. How can I help you today?' }
+    ]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [sessionId, setSessionId] = useState(Date.now().toString());
+
+    // Function to start a new session
+    const startNewSession = () => {
+        setSessionId(Date.now().toString());
+        setChatHistory([
+            { role: 'assistant', content: 'Hello! I\'m Jarvis, your AI assistant. How can I help you today?' }
+        ]);
+    };
+
+    const handleTranscriptReceived = (transcript: string) => {
+        setMessage(transcript);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!message.trim()) return;
+
+        // Add user message to chat
+        const userMessage = { role: 'user', content: message };
+        setChatHistory(prev => [...prev, userMessage]);
+        setMessage('');
+        setIsLoading(true);
+        setError('');
+
+        try {
+            // Make actual API call to backend
+            const response = await fetch('http://localhost:5001/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    message: userMessage.content,
+                    sessionId: sessionId
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get response');
+            }
+
+            const data = await response.json();
+            const assistantMessage = { 
+                role: 'assistant', 
+                content: data.response 
+            };
+            setChatHistory(prev => [...prev, assistantMessage]);
+        } catch (err) {
+            setError('Failed to process your request. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="relative flex flex-col items-center min-h-screen bg-black text-white overflow-hidden px-4 sm:px-8 pb-24">
+            {/* Background Animation */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 2 }}
+                className="absolute inset-0 bg-gradient-to-br from-red-800 via-black to-yellow-500 opacity-90 blur-3xl"
+            />
+
+            {/* Title */}
+            <motion.h1
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1 }}
+                className="z-10 text-3xl sm:text-4xl font-extrabold text-red-500 drop-shadow-md mt-16 sm:mt-24 text-center"
+            >
+                Jarvis <span className="text-yellow-400">AI</span> 
+            </motion.h1>
+
+            <p className="text-yellow-400 text-base sm:text-lg text-center mt-2 drop-shadow-lg max-w-lg">
+               System is Online 
+            </p>
+
+            {/* New Session Button */}
+            <motion.button
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                onClick={startNewSession}
+                className="mt-4 px-3 sm:px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm sm:text-base font-medium rounded-md transition-colors duration-200"
+            >
+                Start New Session
+            </motion.button>
+
+            {/* Chat Area */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="w-full max-w-4xl mt-12 bg-black bg-opacity-80 rounded-lg shadow-lg border border-red-600 p-4 sm:p-6 z-10 flex-grow flex flex-col"
+            >
+                <div className="flex-grow overflow-y-auto mb-6 space-y-4">
+                    {chatHistory.map((msg, index) => (
+                        <div
+                            key={index}
+                            className={`p-3 sm:p-4 rounded-lg ${
+                                msg.role === 'user' 
+                                    ? 'bg-red-900 bg-opacity-30 ml-auto max-w-[90%] sm:max-w-[80%]' 
+                                    : 'bg-gray-900 bg-opacity-50 mr-auto max-w-[90%] sm:max-w-[80%]'
+                            }`}
+                        >
+                            <p className="text-xs sm:text-sm font-medium mb-1 text-yellow-400">
+                                {msg.role === 'user' ? 'You' : 'Jarvis'}
+                            </p>
+                            <p className="text-sm sm:text-base text-gray-200">{msg.content}</p>
+                        </div>
+                    ))}
+                    {isLoading && (
+                        <div className="bg-gray-900 bg-opacity-50 p-3 sm:p-4 rounded-lg mr-auto max-w-[90%] sm:max-w-[80%]">
+                            <p className="text-xs sm:text-sm font-medium mb-1 text-yellow-400">Jarvis</p>
+                            <p className="text-sm sm:text-base text-gray-200">Thinking...</p>
+                        </div>
+                    )}
+                    {error && (
+                        <div className="bg-red-900 bg-opacity-30 p-3 sm:p-4 rounded-lg">
+                            <p className="text-sm sm:text-base text-red-300">{error}</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Input Form */}
+                <form onSubmit={handleSubmit} className="mt-auto">
+                    <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                        <input
+                            type="text"
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            placeholder="Type your message here..."
+                            className="w-full sm:flex-grow px-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-white"
+                        />
+                        <div className="flex items-center space-x-2 w-full sm:w-auto">
+                            <SpeechToText 
+                                onTranscriptReceived={handleTranscriptReceived} 
+                                isDisabled={isLoading} 
+                            />
+                            <button
+                                type="submit"
+                                disabled={isLoading}
+                                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md transition-colors duration-200 disabled:opacity-50 whitespace-nowrap"
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </motion.div>
+        </div>
+    );
+};
+
+export default Home;
