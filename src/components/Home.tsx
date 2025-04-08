@@ -1,66 +1,75 @@
-import React, { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import SpeechToText from './SpeechToText';
 import { API_CONFIG } from '../config/api';
 
+interface Message {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
 const Home = () => {
-    const [message, setMessage] = useState('');
-    const [chatHistory, setChatHistory] = useState([
+    const [messages, setMessages] = useState<Message[]>([
         { role: 'assistant', content: 'Hello! I\'m Jarvis, your AI assistant. How can I help you today?' }
     ]);
+    const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [sessionId, setSessionId] = useState(Date.now().toString());
+    const [error, setError] = useState<string | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Function to start a new session
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
     const startNewSession = () => {
-        setSessionId(Date.now().toString());
-        setChatHistory([
-            { role: 'assistant', content: 'Hello! I\'m Jarvis, your AI assistant. How can I help you today?' }
-        ]);
+        setMessages([]);
+        setSessionId(null);
+        setError(null);
     };
 
     const handleTranscriptReceived = (transcript: string) => {
-        setMessage(transcript);
+        setInput(transcript);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!message.trim()) return;
+        if (!input.trim()) return;
 
-        // Add user message to chat
-        const userMessage = { role: 'user', content: message };
-        setChatHistory(prev => [...prev, userMessage]);
-        setMessage('');
+        const userMessage: Message = { role: 'user', content: input };
+        setMessages(prev => [...prev, userMessage]);
+        setInput('');
         setIsLoading(true);
         setError('');
 
         try {
-            // Make API call to backend using the configured URL
             const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CHAT}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     message: userMessage.content,
                     sessionId: sessionId
                 }),
             });
 
             if (!response.ok) {
-                throw new Error('Failed to get response');
+                throw new Error('Failed to get response from server');
             }
 
             const data = await response.json();
-            const assistantMessage = { 
+            const assistantMessage: Message = { 
                 role: 'assistant', 
                 content: data.response 
             };
-            setChatHistory(prev => [...prev, assistantMessage]);
+            setMessages(prev => [...prev, assistantMessage]);
         } catch (err) {
             setError('Failed to process your request. Please try again.');
-            console.error('API Error:', err);
         } finally {
             setIsLoading(false);
         }
@@ -109,7 +118,7 @@ const Home = () => {
                 className="w-full max-w-4xl mt-12 bg-black bg-opacity-80 rounded-lg shadow-lg border border-red-600 p-4 sm:p-6 z-10 flex-grow flex flex-col"
             >
                 <div className="flex-grow overflow-y-auto mb-6 space-y-4">
-                    {chatHistory.map((msg, index) => (
+                    {messages.map((msg, index) => (
                         <div
                             key={index}
                             className={`p-3 sm:p-4 rounded-lg ${
@@ -142,8 +151,8 @@ const Home = () => {
                     <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
                         <input
                             type="text"
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
                             placeholder="Type your message here..."
                             className="w-full sm:flex-grow px-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-white"
                         />
@@ -158,9 +167,9 @@ const Home = () => {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                                 type="submit"
-                                disabled={isLoading || !message.trim()}
+                                disabled={isLoading || !input.trim()}
                                 className={`px-4 py-2 rounded-md ${
-                                    isLoading || !message.trim()
+                                    isLoading || !input.trim()
                                         ? 'bg-gray-700 cursor-not-allowed'
                                         : 'bg-blue-600 hover:bg-blue-700'
                                 } text-white transition-colors duration-200`}

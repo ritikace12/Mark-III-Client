@@ -39,7 +39,8 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
     const [error, setError] = useState<string | null>(null);
     const [useWebSpeechAPI, setUseWebSpeechAPI] = useState(true);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
+    const chunksRef = useRef<Blob[]>([]);
+    const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const isManualStartRef = useRef<boolean>(false);
 
@@ -55,78 +56,32 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
     const startRecording = async () => {
         try {
             setError(null);
-            isManualStartRef.current = true;
-            
-            // If Web Speech API is enabled, use it instead
-            if (useWebSpeechAPI) {
-                startWebSpeechRecording();
-                return;
-            }
-            
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Try to use the preferred MIME type, fall back to browser default if not supported
-            let mediaRecorder;
-            try {
-                // Try different MIME types in order of preference
-                const mimeTypes = [
-                    'audio/webm',
-                    'audio/webm;codecs=opus',
-                    'audio/ogg;codecs=opus',
-                    'audio/mp4'
-                ];
-                
-                for (const mimeType of mimeTypes) {
-                    try {
-                        if (MediaRecorder.isTypeSupported(mimeType)) {
-                            console.log(`Using MIME type: ${mimeType}`);
-                            mediaRecorder = new MediaRecorder(stream, { mimeType });
-                            break;
-                        }
-                    } catch (e) {
-                        console.log(`MIME type ${mimeType} not supported`);
-                    }
-                }
-                
-                // If none of the preferred types are supported, use browser default
-                if (!mediaRecorder) {
-                    console.log('No preferred MIME types supported, using browser default');
-                    mediaRecorder = new MediaRecorder(stream);
-                }
-            } catch (e) {
-                console.log('Error setting up MediaRecorder, using browser default');
-                mediaRecorder = new MediaRecorder(stream);
-            }
-            
+            const mediaRecorder = new MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
+            chunksRef.current = [];
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunksRef.current.push(event.data);
-                    console.log(`Audio chunk received: ${event.data.size} bytes`);
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    chunksRef.current.push(e.data);
                 }
             };
 
             mediaRecorder.onstop = async () => {
-                // Use the actual MIME type from the recorder
-                const mimeType = mediaRecorder.mimeType || 'audio/webm';
-                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-                console.log(`Recording stopped. Total chunks: ${audioChunksRef.current.length}, Total size: ${audioBlob.size} bytes, MIME type: ${mimeType}`);
-                await uploadAudio(audioBlob);
-                
-                // Stop all tracks to release the microphone
+                const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+                try {
+                    const transcript = await uploadAudio(audioBlob);
+                    onTranscriptReceived(transcript);
+                } catch (error) {
+                    setError(error instanceof Error ? error.message : 'Failed to process audio');
+                }
                 stream.getTracks().forEach(track => track.stop());
             };
 
-            // Request data every 500ms to ensure we're capturing audio
-            mediaRecorder.start(500);
+            mediaRecorder.start();
             setIsRecording(true);
-            
-            console.log(`Recording started with MIME type: ${mediaRecorder.mimeType}`);
-        } catch (err) {
-            console.error('Error accessing microphone:', err);
-            setError('Could not access microphone. Please check permissions.');
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Failed to start recording');
         }
     };
 

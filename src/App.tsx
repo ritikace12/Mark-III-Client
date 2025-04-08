@@ -1,11 +1,11 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
 import Home from './components/Home';
 import Features from './pages/Features';
-import Constraints from './pages/Constraints';
 import Contact from './pages/Contact';
+import Navbar from './components/Navbar';
+import Constraints from './pages/Constraints';
+import './App.css';
+import Footer from './components/Footer';
 
 const App = () => {
     return (
