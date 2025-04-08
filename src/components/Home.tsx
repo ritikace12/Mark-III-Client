@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 const Home = () => {
@@ -9,6 +9,45 @@ const Home = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [sessionId, setSessionId] = useState(Date.now().toString());
+    const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+    const [statusMessage, setStatusMessage] = useState('Checking server status...');
+
+    // Function to check server status
+    const checkServerStatus = async () => {
+        setServerStatus('checking');
+        setStatusMessage('Checking server status...');
+        
+        try {
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+            const response = await fetch(`${apiUrl}/health`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (response.ok) {
+                setServerStatus('online');
+                setStatusMessage('System is Online');
+            } else {
+                setServerStatus('offline');
+                setStatusMessage('System is Offline - Please wait a few seconds and try again');
+            }
+        } catch (err) {
+            setServerStatus('offline');
+            setStatusMessage('System is Offline - Please wait a few seconds and try again');
+        }
+    };
+
+    // Check server status on component mount and periodically
+    useEffect(() => {
+        checkServerStatus();
+        
+        // Check status every 30 seconds
+        const intervalId = setInterval(checkServerStatus, 30000);
+        
+        return () => clearInterval(intervalId);
+    }, []);
 
     // Function to start a new session
     const startNewSession = () => {
@@ -18,11 +57,15 @@ const Home = () => {
         ]);
     };
 
-
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!message.trim()) return;
+        
+        // Check server status before sending message
+        if (serverStatus !== 'online') {
+            setError('Server is currently offline. Please wait a few seconds and try again.');
+            return;
+        }
 
         // Add user message to chat
         const userMessage = { role: 'user', content: message };
@@ -59,6 +102,8 @@ const Home = () => {
             setChatHistory(prev => [...prev, assistantMessage]);
         } catch (err) {
             setError('Failed to process your request. Please try again.');
+            // Check server status after error
+            checkServerStatus();
         } finally {
             setIsLoading(false);
         }
@@ -84,8 +129,11 @@ const Home = () => {
                 Jarvis <span className="text-yellow-400">AI</span> 
             </motion.h1>
 
-            <p className="text-yellow-400 text-base sm:text-lg text-center mt-2 drop-shadow-lg max-w-lg">
-               System is Online 
+            <p className={`text-base sm:text-lg text-center mt-2 drop-shadow-lg max-w-lg ${
+                serverStatus === 'online' ? 'text-green-400' : 
+                serverStatus === 'offline' ? 'text-red-400' : 'text-yellow-400'
+            }`}>
+                {statusMessage}
             </p>
 
             {/* New Session Button */}
