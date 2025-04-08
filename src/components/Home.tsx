@@ -130,7 +130,7 @@ const Home = () => {
             </motion.h1>
 
             <p className={`text-base sm:text-lg text-center mt-2 drop-shadow-lg max-w-lg ${
-                serverStatus === 'online' ? 'text-green-400' : 
+                serverStatus === 'online' ? 'text-white' : 
                 serverStatus === 'offline' ? 'text-red-400' : 'text-yellow-400'
             }`}>
                 {statusMessage}
