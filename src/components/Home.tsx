@@ -1,73 +1,65 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { API_CONFIG } from '../config/api';
-
-interface Message {
-    role: 'user' | 'assistant';
-    content: string;
-}
+import SpeechToText from './SpeechToText';
 
 const Home = () => {
-    const [messages, setMessages] = useState<Message[]>([
+    const [message, setMessage] = useState('');
+    const [chatHistory, setChatHistory] = useState([
         { role: 'assistant', content: 'Hello! I\'m Jarvis, your AI assistant. How can I help you today?' }
     ]);
-    const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [sessionId, setSessionId] = useState<string | null>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [error, setError] = useState('');
+    const [sessionId, setSessionId] = useState(Date.now().toString());
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
+    // Function to start a new session
     const startNewSession = () => {
-        setMessages([
+        setSessionId(Date.now().toString());
+        setChatHistory([
             { role: 'assistant', content: 'Hello! I\'m Jarvis, your AI assistant. How can I help you today?' }
         ]);
-        setSessionId(null);
-        setError(null);
+    };
+
+    const handleTranscriptReceived = (transcript: string) => {
+        setMessage(transcript);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!input.trim()) return;
+        if (!message.trim()) return;
 
-        const userMessage: Message = { role: 'user', content: input };
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
+        // Add user message to chat
+        const userMessage = { role: 'user', content: message };
+        setChatHistory(prev => [...prev, userMessage]);
+        setMessage('');
         setIsLoading(true);
         setError('');
 
         try {
-            const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CHAT}`, {
+            // Get API URL from environment variable or use default
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+            
+            // Make actual API call to backend
+            const response = await fetch(`${apiUrl}/api/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
+                body: JSON.stringify({ 
                     message: userMessage.content,
                     sessionId: sessionId
                 }),
             });
 
             if (!response.ok) {
-                throw new Error('Failed to get response from server');
+                throw new Error('Failed to get response');
             }
 
             const data = await response.json();
-            const assistantMessage: Message = { 
+            const assistantMessage = { 
                 role: 'assistant', 
                 content: data.response 
             };
-            setMessages(prev => [...prev, assistantMessage]);
-            if (data.sessionId) {
-                setSessionId(data.sessionId);
-            }
+            setChatHistory(prev => [...prev, assistantMessage]);
         } catch (err) {
             setError('Failed to process your request. Please try again.');
         } finally {
@@ -118,7 +110,7 @@ const Home = () => {
                 className="w-full max-w-4xl mt-12 bg-black bg-opacity-80 rounded-lg shadow-lg border border-red-600 p-4 sm:p-6 z-10 flex-grow flex flex-col"
             >
                 <div className="flex-grow overflow-y-auto mb-6 space-y-4">
-                    {messages.map((msg, index) => (
+                    {chatHistory.map((msg, index) => (
                         <div
                             key={index}
                             className={`p-3 sm:p-4 rounded-lg ${
@@ -151,19 +143,25 @@ const Home = () => {
                     <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
                         <input
                             type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
                             placeholder="Type your message here..."
                             className="w-full sm:flex-grow px-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-white"
                         />
                         <div className="flex items-center space-x-2 w-full sm:w-auto">
+                            {/* SpeechToText button temporarily hidden
+                            <SpeechToText 
+                                onTranscriptReceived={handleTranscriptReceived} 
+                                isDisabled={isLoading}
+                            />
+                            */}
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                                 type="submit"
-                                disabled={isLoading || !input.trim()}
+                                disabled={isLoading || !message.trim()}
                                 className={`px-4 py-2 rounded-md ${
-                                    isLoading || !input.trim()
+                                    isLoading || !message.trim()
                                         ? 'bg-gray-700 cursor-not-allowed'
                                         : 'bg-blue-600 hover:bg-blue-700'
                                 } text-white transition-colors duration-200`}
