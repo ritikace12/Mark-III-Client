@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import SpeechToText from './SpeechToText';
 
 const Home = () => {
     const [message, setMessage] = useState('');
@@ -19,9 +18,7 @@ const Home = () => {
         ]);
     };
 
-    const handleTranscriptReceived = (transcript: string) => {
-        setMessage(transcript);
-    };
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
