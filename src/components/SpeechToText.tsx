@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { API_CONFIG } from '../config/api';
 
 // Define the SpeechRecognition interface
 interface SpeechRecognitionEvent extends Event {
@@ -220,9 +221,6 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
     };
 
     const uploadAudio = async (audioBlob: Blob) => {
-        setIsProcessing(true);
-        setError(null);
-
         try {
             // Check if the audio blob is empty
             if (audioBlob.size === 0) {
@@ -234,147 +232,38 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
                 throw new Error('Audio recording is too short. Please speak for at least a few seconds.');
             }
 
-            console.log(`Uploading audio file: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
-
             // Try a direct upload with explicit content type
-            const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+            const uploadResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TRANSCRIBE}`, {
                 method: 'POST',
                 headers: {
-                    'authorization': 'a37c27a55b944488928a76503c1ed8bb',
-                    'content-type': 'audio/webm'
+                    'Content-Type': 'audio/webm'
                 },
                 body: audioBlob
             });
 
             if (!uploadResponse.ok) {
-                const errorData = await uploadResponse.json().catch(() => ({}));
-                console.error('Upload error response:', errorData);
-                
-                // Try with a different content type
-                console.log('Trying with a different content type...');
-                const retryResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+                // Retry with a different content type
+                const retryResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TRANSCRIBE}`, {
                     method: 'POST',
                     headers: {
-                        'authorization': 'a37c27a55b944488928a76503c1ed8bb',
-                        'content-type': 'audio/mp4'
+                        'Content-Type': 'audio/mp4'
                     },
                     body: audioBlob
                 });
-                
+
                 if (!retryResponse.ok) {
-                    const retryErrorData = await retryResponse.json().catch(() => ({}));
-                    console.error('Retry upload error response:', retryErrorData);
-                    throw new Error(`Failed to upload audio: ${retryErrorData.error || retryResponse.statusText || 'Unknown error'}`);
+                    throw new Error('Failed to upload audio. Please try again.');
                 }
-                
-                const retryResult = await retryResponse.json();
-                console.log('Retry upload successful:', retryResult);
-                const { upload_url } = retryResult;
-                
-                // Submit the transcription request
-                await submitTranscription(upload_url);
-                return;
+
+                const retryData = await retryResponse.json();
+                return retryData.transcript;
             }
 
-            const uploadResult = await uploadResponse.json();
-            console.log('Upload successful:', uploadResult);
-            const { upload_url } = uploadResult;
-
-            // Submit the transcription request
-            await submitTranscription(upload_url);
-        } catch (err) {
-            console.error('Error processing audio:', err);
-            setError(err instanceof Error ? err.message : 'Failed to process audio. Please try again.');
-            setIsProcessing(false);
-        }
-    };
-    
-    const submitTranscription = async (uploadUrl: string) => {
-        try {
-            // Submit the transcription request
-            const transcriptionResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
-                method: 'POST',
-                headers: {
-                    'authorization': 'a37c27a55b944488928a76503c1ed8bb',
-                    'content-type': 'application/json'
-                },
-                body: JSON.stringify({
-                    audio_url: uploadUrl,
-                    language_detection: true
-                })
-            });
-
-            if (!transcriptionResponse.ok) {
-                const errorData = await transcriptionResponse.json().catch(() => ({}));
-                console.error('Transcription request error:', errorData);
-                throw new Error(`Failed to submit transcription request: ${errorData.error || transcriptionResponse.statusText || 'Unknown error'}`);
-            }
-
-            const transcriptionResult = await transcriptionResponse.json();
-            console.log('Transcription request successful:', transcriptionResult);
-            const { id } = transcriptionResult;
-
-            // Poll for the transcription result
-            await pollTranscription(id);
-        } catch (err) {
-            console.error('Error submitting transcription:', err);
-            setError(err instanceof Error ? err.message : 'Failed to submit transcription. Please try again.');
-            setIsProcessing(false);
-        }
-    };
-
-    const pollTranscription = async (transcriptId: string) => {
-        try {
-            // Set a timeout to prevent infinite polling
-            const timeoutId = setTimeout(() => {
-                setError('Transcription timed out. Please try again.');
-                setIsProcessing(false);
-            }, 60000); // 60 seconds timeout
-
-            console.log(`Starting to poll for transcription with ID: ${transcriptId}`);
-
-            const pollingInterval = setInterval(async () => {
-                try {
-                    const pollingResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
-                        headers: {
-                            'authorization': 'a37c27a55b944488928a76503c1ed8bb'
-                        }
-                    });
-
-                    if (!pollingResponse.ok) {
-                        clearInterval(pollingInterval);
-                        clearTimeout(timeoutId);
-                        const errorData = await pollingResponse.json().catch(() => ({}));
-                        console.error('Polling error response:', errorData);
-                        throw new Error(`Failed to get transcription result: ${errorData.error || pollingResponse.statusText || 'Unknown error'}`);
-                    }
-
-                    const transcriptionResult = await pollingResponse.json();
-                    console.log(`Transcription status: ${transcriptionResult.status}`, transcriptionResult);
-
-                    if (transcriptionResult.status === 'completed') {
-                        clearInterval(pollingInterval);
-                        clearTimeout(timeoutId);
-                        onTranscriptReceived(transcriptionResult.text);
-                        setIsProcessing(false);
-                    } else if (transcriptionResult.status === 'error') {
-                        clearInterval(pollingInterval);
-                        clearTimeout(timeoutId);
-                        setError('Transcription failed: ' + (transcriptionResult.error || 'Unknown error'));
-                        setIsProcessing(false);
-                    }
-                } catch (pollingError) {
-                    clearInterval(pollingInterval);
-                    clearTimeout(timeoutId);
-                    console.error('Error during polling:', pollingError);
-                    setError('Failed to get transcription result. Please try again.');
-                    setIsProcessing(false);
-                }
-            }, 1000);
-        } catch (err) {
-            console.error('Error setting up polling:', err);
-            setError('Failed to set up transcription polling. Please try again.');
-            setIsProcessing(false);
+            const data = await uploadResponse.json();
+            return data.transcript;
+        } catch (error) {
+            console.error('Upload error:', error);
+            throw error;
         }
     };
 

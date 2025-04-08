@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import SpeechToText from './SpeechToText';
+import { API_CONFIG } from '../config/api';
 
 const Home = () => {
     const [message, setMessage] = useState('');
@@ -35,11 +36,8 @@ const Home = () => {
         setError('');
 
         try {
-            // Get API URL from environment variable or use default
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-            
-            // Make actual API call to backend
-            const response = await fetch(`${apiUrl}/api/chat`, {
+            // Make API call to backend using the configured URL
+            const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CHAT}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -62,6 +60,7 @@ const Home = () => {
             setChatHistory(prev => [...prev, assistantMessage]);
         } catch (err) {
             setError('Failed to process your request. Please try again.');
+            console.error('API Error:', err);
         } finally {
             setIsLoading(false);
         }
