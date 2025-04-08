@@ -65,6 +65,9 @@ const Home = () => {
                 content: data.response 
             };
             setMessages(prev => [...prev, assistantMessage]);
+            if (data.sessionId) {
+                setSessionId(data.sessionId);
+            }
         } catch (err) {
             setError('Failed to process your request. Please try again.');
         } finally {

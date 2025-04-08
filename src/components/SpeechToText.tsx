@@ -38,7 +38,6 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
     const [error, setError] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
-    const recognitionRef = useRef<SpeechRecognition | null>(null);
 
     const startRecording = async () => {
         try {
@@ -60,7 +59,11 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
                     const transcript = await uploadAudio(audioBlob);
                     onTranscriptReceived(transcript);
                 } catch (error) {
-                    setError(error instanceof Error ? error.message : 'Failed to process audio');
+                    const errorMessage = error instanceof Error 
+                        ? error.message 
+                        : 'Failed to process audio. Please try again.';
+                    setError(errorMessage);
+                    console.error('Audio processing error:', error);
                 }
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -68,7 +71,11 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
             mediaRecorder.start();
             setIsRecording(true);
         } catch (error) {
-            setError(error instanceof Error ? error.message : 'Failed to start recording');
+            const errorMessage = error instanceof Error 
+                ? error.message 
+                : 'Failed to access microphone. Please check your browser permissions.';
+            setError(errorMessage);
+            console.error('Recording error:', error);
         }
     };
 
