@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import SpeechToText from './SpeechToText';
 import { API_CONFIG } from '../config/api';
 
 interface Message {
@@ -27,13 +26,11 @@ const Home = () => {
     }, [messages]);
 
     const startNewSession = () => {
-        setMessages([]);
+        setMessages([
+            { role: 'assistant', content: 'Hello! I\'m Jarvis, your AI assistant. How can I help you today?' }
+        ]);
         setSessionId(null);
         setError(null);
-    };
-
-    const handleTranscriptReceived = (transcript: string) => {
-        setInput(transcript);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -157,12 +154,6 @@ const Home = () => {
                             className="w-full sm:flex-grow px-4 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-white"
                         />
                         <div className="flex items-center space-x-2 w-full sm:w-auto">
-                            {/* SpeechToText button temporarily hidden
-                            <SpeechToText 
-                                onTranscriptReceived={handleTranscriptReceived} 
-                                isDisabled={isLoading}
-                            />
-                            */}
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}

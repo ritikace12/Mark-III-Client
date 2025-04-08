@@ -35,23 +35,10 @@ interface SpeechToTextProps {
 
 const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDisabled = false }) => {
     const [isRecording, setIsRecording] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [useWebSpeechAPI, setUseWebSpeechAPI] = useState(true);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
-    const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
-    const isManualStartRef = useRef<boolean>(false);
-
-    // Clean up function to ensure recognition is stopped when component unmounts
-    React.useEffect(() => {
-        return () => {
-            if (recognitionRef.current) {
-                recognitionRef.current.stop();
-            }
-        };
-    }, []);
 
     const startRecording = async () => {
         try {
@@ -86,91 +73,8 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
     };
 
     const stopRecording = () => {
-        if (useWebSpeechAPI) {
-            stopWebSpeechRecording();
-            return;
-        }
-        
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
-            setIsRecording(false);
-        }
-    };
-    
-    // Web Speech API implementation
-    const startWebSpeechRecording = () => {
-        try {
-            // Check if the browser supports the Web Speech API
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                throw new Error('Web Speech API is not supported in this browser.');
-            }
-            
-            // Create a new speech recognition instance
-            const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognitionConstructor) {
-                throw new Error('SpeechRecognition constructor not found');
-            }
-            
-            // If there's already a recognition instance running, stop it first
-            if (recognitionRef.current) {
-                recognitionRef.current.stop();
-                recognitionRef.current = null;
-            }
-            
-            const recognition = new SpeechRecognitionConstructor();
-            
-            // Configure the recognition
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = 'en-US';
-            
-            // Store the recognition instance
-            recognitionRef.current = recognition;
-            
-            // Set up event handlers
-            recognition.onstart = () => {
-                console.log('Web Speech API started');
-                setIsRecording(true);
-            };
-            
-            recognition.onerror = (event: SpeechRecognitionEvent) => {
-                console.error('Web Speech API error:', event.error);
-                // Only show error if it's not a no-speech error or if it was manually started
-                if (event.error !== 'no-speech' || isManualStartRef.current) {
-                    setError(`Speech recognition error: ${event.error}`);
-                }
-                setIsRecording(false);
-                isManualStartRef.current = false;
-            };
-            
-            recognition.onend = () => {
-                console.log('Web Speech API ended');
-                setIsRecording(false);
-                isManualStartRef.current = false;
-            };
-            
-            recognition.onresult = (event: SpeechRecognitionEvent) => {
-                const transcript = Array.from(event.results)
-                    .map(result => result[0].transcript)
-                    .join('');
-                
-                if (transcript) {
-                    onTranscriptReceived(transcript);
-                }
-            };
-            
-            // Start the recognition
-            recognition.start();
-        } catch (err) {
-            console.error('Error starting Web Speech API:', err);
-            setError('Could not start speech recognition. Please check browser support.');
-            isManualStartRef.current = false;
-        }
-    };
-    
-    const stopWebSpeechRecording = () => {
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
             setIsRecording(false);
         }
     };
@@ -229,13 +133,11 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isDisabled || isProcessing}
+                    disabled={isDisabled}
                     className={`flex items-center justify-center p-3 rounded-lg w-40 h-12 ${
                         isRecording 
                             ? 'bg-red-600 hover:bg-red-700' 
-                            : isProcessing 
-                                ? 'bg-gray-600 cursor-not-allowed' 
-                                : 'bg-red-500 hover:bg-red-600'
+                            : 'bg-red-500 hover:bg-red-600'
                     } text-white transition-colors duration-200 whitespace-nowrap shadow-md`}
                 >
                     {isRecording ? (
@@ -244,14 +146,6 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
                                 <rect x="6" y="6" width="12" height="12" rx="2" />
                             </svg>
                             <span>Stop</span>
-                        </>
-                    ) : isProcessing ? (
-                        <>
-                            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span>Processing</span>
                         </>
                     ) : (
                         <>
