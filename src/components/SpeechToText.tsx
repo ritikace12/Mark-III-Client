@@ -40,12 +40,21 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
-    const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const lastSpeechTimeRef = useRef<number>(Date.now());
+    const isManualStartRef = useRef<boolean>(false);
+
+    // Clean up function to ensure recognition is stopped when component unmounts
+    React.useEffect(() => {
+        return () => {
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
+        };
+    }, []);
 
     const startRecording = async () => {
         try {
             setError(null);
+            isManualStartRef.current = true;
             
             // If Web Speech API is enabled, use it instead
             if (useWebSpeechAPI) {
@@ -146,11 +155,17 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
                 throw new Error('SpeechRecognition constructor not found');
             }
             
+            // If there's already a recognition instance running, stop it first
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+                recognitionRef.current = null;
+            }
+            
             const recognition = new SpeechRecognitionConstructor();
             
             // Configure the recognition
-            recognition.continuous = true;
-            recognition.interimResults = true;
+            recognition.continuous = false;
+            recognition.interimResults = false;
             recognition.lang = 'en-US';
             
             // Store the recognition instance
@@ -160,28 +175,25 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
             recognition.onstart = () => {
                 console.log('Web Speech API started');
                 setIsRecording(true);
-                // Reset the silence timer
-                lastSpeechTimeRef.current = Date.now();
-                startSilenceTimer();
             };
             
             recognition.onerror = (event: SpeechRecognitionEvent) => {
                 console.error('Web Speech API error:', event.error);
-                setError(`Speech recognition error: ${event.error}`);
+                // Only show error if it's not a no-speech error or if it was manually started
+                if (event.error !== 'no-speech' || isManualStartRef.current) {
+                    setError(`Speech recognition error: ${event.error}`);
+                }
                 setIsRecording(false);
-                clearSilenceTimer();
+                isManualStartRef.current = false;
             };
             
             recognition.onend = () => {
                 console.log('Web Speech API ended');
                 setIsRecording(false);
-                clearSilenceTimer();
+                isManualStartRef.current = false;
             };
             
             recognition.onresult = (event: SpeechRecognitionEvent) => {
-                // Update the last speech time
-                lastSpeechTimeRef.current = Date.now();
-                
                 const transcript = Array.from(event.results)
                     .map(result => result[0].transcript)
                     .join('');
@@ -196,31 +208,7 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
         } catch (err) {
             console.error('Error starting Web Speech API:', err);
             setError('Could not start speech recognition. Please check browser support.');
-        }
-    };
-    
-    // Function to start the silence timer
-    const startSilenceTimer = () => {
-        // Clear any existing timer
-        clearSilenceTimer();
-        
-        // Set a new timer to check for silence every 100ms
-        silenceTimerRef.current = setInterval(() => {
-            const silenceDuration = Date.now() - lastSpeechTimeRef.current;
-            
-            // If silence has been detected for more than 500ms, stop recording
-            if (silenceDuration > 500 && isRecording) {
-                console.log('Silence detected for 500ms, stopping recording');
-                stopWebSpeechRecording();
-            }
-        }, 100);
-    };
-    
-    // Function to clear the silence timer
-    const clearSilenceTimer = () => {
-        if (silenceTimerRef.current) {
-            clearInterval(silenceTimerRef.current);
-            silenceTimerRef.current = null;
+            isManualStartRef.current = false;
         }
     };
     
@@ -228,7 +216,6 @@ const SpeechToText: React.FC<SpeechToTextProps> = ({ onTranscriptReceived, isDis
         if (recognitionRef.current) {
             recognitionRef.current.stop();
             setIsRecording(false);
-            clearSilenceTimer();
         }
     };
 
